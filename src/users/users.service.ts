@@ -1,26 +1,62 @@
 import { Injectable } from '@nestjs/common';
+import mongoose, { Model } from 'mongoose';
+import { genSaltSync, hashSync, compareSync } from 'bcrypt';
+import { InjectModel } from '@nestjs/mongoose';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { User } from './schemas/user.schema';
 
 @Injectable()
 export class UsersService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
+  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  getHashPassword(password: string) {
+    const salt = genSaltSync(10);
+    const hash = hashSync(password, salt);
+    return hash;
+  }
+
+  isValidPassword(password: string, hashedPassword: string) {
+    return compareSync(password, hashedPassword);
+  }
+
+  isValidId(id: string): boolean {
+    return mongoose.Types.ObjectId.isValid(id);
+  }
+
+  async create(createUserDto: CreateUserDto) {
+    const hashPassword = this.getHashPassword(createUserDto.password);
+    const user = await this.userModel.create({
+      ...createUserDto,
+      password: hashPassword,
+    });
+    return user;
   }
 
   findAll() {
     return `This action returns all users`;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  findOne(id: string) {
+    if (!this.isValidId(id)) {
+      return 'not found user';
+    }
+    return this.userModel.findOne({ _id: id });
+  }
+  findOneByUsername(username: string) {
+    return this.userModel.findOne({ email: username });
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  update(updateUserDto: UpdateUserDto) {
+    if (!this.isValidId(updateUserDto._id)) {
+      return 'not found user';
+    }
+    return this.userModel.updateOne({ _id: updateUserDto._id }, { ...updateUserDto });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  remove(id: string) {
+    if (!this.isValidId(id)) {
+      return 'not found user';
+    }
+    return this.userModel.deleteOne({ _id: id });
   }
 }
